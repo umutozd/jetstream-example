@@ -1,0 +1,15 @@
+server_name=n1-c1
+listen=192.168.0.72:4222
+
+jetstream {
+   store_dir=/Users/umutozdogan/Code/otsimo/mono/storage/srv1
+}
+
+cluster {
+  name: C1
+  listen: 192.168.0.72:6222
+  routes: [
+    nats-route://192.168.0.72:6223
+    nats-route://192.168.0.9:6224
+  ]
+}
