@@ -170,7 +170,12 @@ func (jsc *jetStreamClient) Produce(ctx context.Context, topic string, value []b
 	}
 
 	msgId := jsc.nuid.Next()
-	opts := []nats.PubOpt{nats.MsgId(msgId), nats.RetryWait(time.Second * 5), nats.RetryAttempts(5)}
+	opts := []nats.PubOpt{
+		nats.MsgId(msgId),
+		nats.RetryWait(time.Second),
+		nats.RetryAttempts(30),
+		nats.AckWait(time.Second * 30),
+	}
 	if _, err := jsc.js.Publish(topic, value, opts...); err != nil {
 		return fmt.Errorf("error producing message: %v", err)
 	}
