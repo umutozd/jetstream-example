@@ -336,7 +336,7 @@ func (obs *obs) Put(meta *ObjectMeta, r io.Reader, opts ...ObjectOpt) (*ObjectIn
 		return perr
 	}
 
-	purgePartial := func() { obs.js.purgeStream(obs.stream, &streamPurgeRequest{Subject: chunkSubj}) }
+	purgePartial := func() { obs.js.purgeStream(obs.stream, &StreamPurgeRequest{Subject: chunkSubj}) }
 
 	// Create our own JS context to handle errors etc.
 	js, err := obs.js.nc.JetStream(PublishAsyncErrHandler(func(js JetStream, _ *Msg, err error) { setErr(err) }))
@@ -372,37 +372,43 @@ func (obs *obs) Put(meta *ObjectMeta, r io.Reader, opts ...ObjectOpt) (*ObjectIn
 
 		// Actual read.
 		// TODO(dlc) - Deadline?
-		n, err := r.Read(chunk)
+		n, readErr := r.Read(chunk)
+
+		// Handle all non EOF errors
+		if readErr != nil && readErr != io.EOF {
+			purgePartial()
+			return nil, readErr
+		}
+
+		// Add chunk only if we received data
+		if n > 0 {
+			// Chunk processing.
+			m.Data = chunk[:n]
+			h.Write(m.Data)
+
+			// Send msg itself.
+			if _, err := js.PublishMsgAsync(m); err != nil {
+				purgePartial()
+				return nil, err
+			}
+			if err := getErr(); err != nil {
+				purgePartial()
+				return nil, err
+			}
+			// Update totals.
+			sent++
+			total += uint64(n)
+		}
 
 		// EOF Processing.
-		if err == io.EOF {
+		if readErr == io.EOF {
 			// Finalize sha.
 			sha := h.Sum(nil)
 			// Place meta info.
 			info.Size, info.Chunks = uint64(total), uint32(sent)
 			info.Digest = fmt.Sprintf(objDigestTmpl, base64.URLEncoding.EncodeToString(sha[:]))
 			break
-		} else if err != nil {
-			purgePartial()
-			return nil, err
 		}
-
-		// Chunk processing.
-		m.Data = chunk[:n]
-		h.Write(m.Data)
-
-		// Send msg itself.
-		if _, err := js.PublishMsgAsync(m); err != nil {
-			purgePartial()
-			return nil, err
-		}
-		if err := getErr(); err != nil {
-			purgePartial()
-			return nil, err
-		}
-		// Update totals.
-		sent++
-		total += uint64(n)
 	}
 
 	// Publish the metadata.
@@ -439,7 +445,7 @@ func (obs *obs) Put(meta *ObjectMeta, r io.Reader, opts ...ObjectOpt) (*ObjectIn
 	// Delete any original one.
 	if einfo != nil && !einfo.Deleted {
 		chunkSubj := fmt.Sprintf(objChunksPreTmpl, obs.name, einfo.NUID)
-		obs.js.purgeStream(obs.stream, &streamPurgeRequest{Subject: chunkSubj})
+		obs.js.purgeStream(obs.stream, &StreamPurgeRequest{Subject: chunkSubj})
 	}
 
 	return info, nil
@@ -600,7 +606,7 @@ func (obs *obs) Delete(name string) error {
 
 	// Purge chunks for the object.
 	chunkSubj := fmt.Sprintf(objChunksPreTmpl, obs.name, info.NUID)
-	return obs.js.purgeStream(obs.stream, &streamPurgeRequest{Subject: chunkSubj})
+	return obs.js.purgeStream(obs.stream, &StreamPurgeRequest{Subject: chunkSubj})
 }
 
 // AddLink will add a link to another object into this object store.
