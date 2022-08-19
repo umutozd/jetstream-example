@@ -1,15 +1,15 @@
 server_name=n3-c1
-listen=192.168.0.9:4224
+listen=localhost:4224
 
 jetstream {
-   store_dir=/home/otsimo/nats/storage/server3
+   store_dir=/Users/umutozdogan/Code/umutozd/jetstream-example/nats-storage/srv3
 }
 
 cluster {
   name: C1
-  listen: 192.168.0.9:6224
+  listen: localhost:6224
   routes: [
-    nats-route://192.168.0.72:6222
-    nats-route://192.168.0.72:6223
+    nats-route://localhost:6222
+    nats-route://localhost:6223
   ]
 }
