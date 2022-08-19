@@ -56,6 +56,7 @@ func NewJetStreamClient(uri, consumerGroup, consumerName string) (PubSubClient, 
 		consumerGroup: consumerGroup,
 		consumerName:  consumerName,
 		nuid:          nuid.New(),
+		streams:       make(map[string]*nats.StreamInfo),
 	}
 
 	var err error
