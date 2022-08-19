@@ -3,7 +3,7 @@ module github.com/umutozd/jetstream-example
 go 1.18
 
 require (
-	github.com/nats-io/nats.go v1.16.0
+	github.com/nats-io/nats.go v1.16.1-0.20220816170848-b81c9e71b479
 	github.com/nats-io/nuid v1.0.1
 	github.com/sirupsen/logrus v1.9.0
 )
