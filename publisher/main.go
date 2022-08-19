@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	uri = "nats://192.168.0.72:4222,nats://192.168.0.72:4223,nats://192.168.0.9:4224"
+	uri = "nats://localhost:4222,nats://localhost:4223,nats://localhost:4224"
 )
 
 func main() {
@@ -39,7 +39,7 @@ func main() {
 		}
 		b, err := json.Marshal(sop)
 		if err != nil {
-			logrus.WithError(err).Error("error marshaling SendOtsimoPush")
+			logrus.WithError(err).Error("error marshaling PublishMessage")
 			continue
 		}
 		if err := cli.Produce(context.TODO(), *topic, b); err != nil {
@@ -48,7 +48,7 @@ func main() {
 
 		if i%10 == 0 {
 			logrus.Infof("publisher: sleeping at index=%d", i)
-			time.Sleep(time.Millisecond * 25)
+			time.Sleep(time.Millisecond * 250)
 		}
 	}
 }

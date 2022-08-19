@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -9,7 +11,7 @@ import (
 )
 
 const (
-	uri = "nats://192.168.0.72:4222,nats://192.168.0.72:4223,nats://192.168.0.9:4224"
+	uri = "nats://localhost:4222,nats://localhost:4223,nats://localhost:4224"
 )
 
 func main() {
@@ -26,15 +28,57 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("error creating jetstream client")
 	}
+
+	type PublishMessage struct {
+		Count int `json:"count,omitempty"`
+	}
+
+	expectedMessages := 3000
+	result := make([]uint16, expectedMessages)
+	resultLock := sync.Mutex{}
 	cli.Subscribe(*topic, func(msg *jetstream.Message) error {
-		logrus.WithFields(logrus.Fields{
-			"key":         msg.Key,
-			"value":       string(msg.Value),
-			"timestamp":   msg.Timestamp,
-			"redelivered": msg.Redelivered,
-		}).Info("received message")
+		// logrus.WithFields(logrus.Fields{
+		// 	"key":         msg.Key,
+		// 	"value":       string(msg.Value),
+		// 	"timestamp":   msg.Timestamp,
+		// 	"redelivered": msg.Redelivered,
+		// }).Info("received message")
+
+		pmsg := &PublishMessage{}
+		if err := json.Unmarshal(msg.Value, pmsg); err != nil {
+			logrus.WithError(err).Error("error unmarshaling message into PublishMessage")
+			return nil // do not return error so that we won't receive this one again
+		}
+
+		resultLock.Lock()
+		defer resultLock.Unlock()
+		result[pmsg.Count]++
 		return nil
 	})
 
-	time.Sleep(time.Minute * 20) // sleep so that background subscription handler function can run
+	ticker := time.NewTicker(time.Millisecond * 250)
+	tickerFunc := func() (shouldStop bool) {
+		resultLock.Lock()
+		defer resultLock.Unlock()
+
+		for i, count := range result {
+			if count == 0 {
+				logrus.Warnf("haven't yet received message %d", i)
+				return false
+			}
+		}
+		return true
+	}
+	for range ticker.C {
+		if shouldStop := tickerFunc(); shouldStop {
+			break
+		}
+	}
+
+	// now range over the entire result slice to count if all messages have been received exactly once
+	for i, count := range result {
+		if count != 1 {
+			logrus.Warnf("message %d has been received %d times", i, count)
+		}
+	}
 }
